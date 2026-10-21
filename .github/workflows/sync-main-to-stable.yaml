@@ -95,14 +95,22 @@ jobs:
           exit 1
         fi
 
-        # Nothing changed after merge (already up to date)
-        if [[ -z "$(git status --porcelain)" ]]; then
-          echo "No changes to commit after merge. Skipping PR creation."
+        # Commit staged changes if any (3-way merge case).
+        # Fast-forward merges advance HEAD without leaving staged changes,
+        # so this block is intentionally skipped in that case.
+        if [[ -n "$(git status --porcelain)" ]]; then
+          git commit -m "Merge main into stable with known resolved conflicts"
+        fi
+
+        # Check whether MERGE_BRANCH actually differs from TARGET_BRANCH.
+        # git status --porcelain is empty after a fast-forward even though
+        # MERGE_BRANCH is now ahead of stable, so we compare HEADs instead.
+        if git diff --quiet origin/${{ env.TARGET_BRANCH }} HEAD; then
+          echo "Merge branch is identical to stable. Skipping PR creation."
           echo "skip=true" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
-        git commit -m "Merge main into stable with known resolved conflicts"
         git push origin "$MERGE_BRANCH"
 
     - name: Open pull request
