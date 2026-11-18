@@ -108,8 +108,9 @@ jobs:
       contents: write
       pull-requests: write
     env:
-      # PAT so PR open/update events trigger pull_request CI (GITHUB_TOKEN cannot).
-      GH_TOKEN: ${{ secrets.GHA_SECRET_PAT }}
+      # Prefer PAT so PR open/update events trigger pull_request CI.
+      # Fall back to GITHUB_TOKEN (e.g. forks without GHA_SECRET_PAT).
+      GH_TOKEN: ${{ secrets.GHA_SECRET_PAT || github.token }}
       # Defined here so backticks are plain YAML characters, avoiding
       # heredoc-inside-run indentation issues that break YAML parsing.
       PR_BODY: |
@@ -129,7 +130,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         fetch-depth: 0
-        token: ${{ secrets.GHA_SECRET_PAT }}
+        token: ${{ secrets.GHA_SECRET_PAT || github.token }}
 
     - name: Open or reuse pull request
       run: |
