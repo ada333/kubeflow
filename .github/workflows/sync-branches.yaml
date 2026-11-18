@@ -11,11 +11,6 @@ on:
         description: "To:"
         required: true
         type: string
-      base:
-        description: "Base branch to create target from (omit to use existing target branch):"
-        required: false
-        type: string
-        default: ""
   workflow_call:
     inputs:
       source:
@@ -26,11 +21,10 @@ on:
         description: "To:"
         required: true
         type: string
-      base:
-        description: "Base branch to create target from (omit to use existing target branch):"
-        required: false
-        type: string
-        default: ""
+    outputs:
+      pushed:
+        description: "Whether this run pushed a new tip to the target branch"
+        value: ${{ jobs.sync-branches.outputs.pushed }}
 
 permissions: {}
 
@@ -43,6 +37,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      pushed: ${{ steps.merge.outputs.pushed }}
 
     steps:
     - name: Set up Git
@@ -56,19 +52,15 @@ jobs:
         fetch-depth: 0
 
     - name: Merge source branch into target
-      env:
-        BASE_BRANCH: ${{ inputs.base }}
+      id: merge
       run: |
         set -e
+        echo "pushed=false" >> "$GITHUB_OUTPUT"
 
-        # Checkout or create the target branch.
-        if [[ -n "$BASE_BRANCH" ]]; then
-          git fetch origin "$BASE_BRANCH:$BASE_BRANCH"
-          git checkout -b "$TARGET_BRANCH" "$BASE_BRANCH"
-        else
-          git fetch origin "$TARGET_BRANCH:$TARGET_BRANCH"
-          git checkout "$TARGET_BRANCH"
-        fi
+        # Caller must prepare the target branch before invoking this workflow
+        # (e.g. reset sync/main-to-stable from stable for the PR flow).
+        git fetch origin "$TARGET_BRANCH:$TARGET_BRANCH"
+        git checkout "$TARGET_BRANCH"
 
         # Save the target commit before merging so all protected-path restores
         # reference it explicitly.
@@ -120,8 +112,6 @@ jobs:
             echo "Keeping target branch version of $FILE."
             git checkout "$TARGET_COMMIT" -- "$FILE"
             git add "$FILE"
-          else
-            git rm -f --ignore-unmatch -- "$FILE"
           fi
         done
 
@@ -147,7 +137,5 @@ jobs:
           exit 0
         fi
 
-        # Fetch the remote branch first so --force-with-lease can verify its tip on
-        # re-runs (e.g. a same-day sync branch that already exists on origin).
-        git fetch origin "$TARGET_BRANCH" 2>/dev/null || true
-        git push --force-with-lease origin "$TARGET_BRANCH"
+        git push origin "$TARGET_BRANCH"
+        echo "pushed=true" >> "$GITHUB_OUTPUT"
